@@ -285,3 +285,169 @@ rtt min/avg/max/mdev = 3.112/3.150/3.189/0.038 ms
 ```
 
 # 2. Web web web #
+
+* Setup du service web :
+
+```
+[florentinfallon@node2 ~]$ sudo dnf install nginx
+Installed:
+  nginx-1:1.20.1-14.el9_2.1.aarch64                                             
+  nginx-core-1:1.20.1-14.el9_2.1.aarch64                                        
+  nginx-filesystem-1:1.20.1-14.el9_2.1.noarch                                   
+  rocky-logos-httpd-90.14-1.el9.noarch                                          
+
+Complete!
+```
+
+* Configuration :
+
+```
+[florentinfallon@node2 site_nul]$ cat index.html 
+# For more information on configuration, see:
+#   * Official English Documentation: http://nginx.org/en/docs/
+#   * Official Russian Documentation: http://nginx.org/ru/docs/
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+
+# Load dynamic modules. See /usr/share/doc/nginx/README.dynamic.
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    # Load modular configuration files from the /etc/nginx/conf.d directory.
+    # See http://nginx.org/en/docs/ngx_core_module.html#include
+    # for more information.
+    include /etc/nginx/conf.d/*.conf;
+
+    server {
+        listen       80;
+        listen       [::]:80;
+        server_name  _;
+        root         /var/www/site_nul;
+
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
+
+        error_page 404 /404.html;
+        location = /404.html {
+        }
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+        }
+    }
+
+# Settings for a TLS enabled server.
+#
+#    server {
+#        listen       443 ssl http2;
+#        listen       [::]:443 ssl http2;
+#        server_name  _;
+#        root         /usr/share/nginx/html;
+#
+#        ssl_certificate "/etc/pki/nginx/server.crt";
+#        ssl_certificate_key "/etc/pki/nginx/private/server.key";
+#        ssl_session_cache shared:SSL:1m;
+#        ssl_session_timeout  10m;
+#        ssl_ciphers PROFILE=SYSTEM;
+#        ssl_prefer_server_ciphers on;
+#
+#        # Load configuration files for the default server block.
+#        include /etc/nginx/default.d/*.conf;
+#
+#        error_page 404 /404.html;
+#            location = /40x.html {
+#        }
+#
+#        error_page 500 502 503 504 /50x.html;
+#            location = /50x.html {
+#        }
+#    }
+
+}
+```
+
+* Service actif :
+
+```
+[florentinfallon@node2 site_nul]$ sudo systemctl status nginx
+● nginx.service - The nginx HTTP and reverse proxy server
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled; preset: di>
+     Active: active (running) since Wed 2023-10-25 13:02:20 CEST; 7s ago
+    Process: 1837 ExecStartPre=/usr/bin/rm -f /run/nginx.pid (code=exited, stat>
+    Process: 1838 ExecStartPre=/usr/sbin/nginx -t (code=exited, status=0/SUCCES>
+    Process: 1839 ExecStart=/usr/sbin/nginx (code=exited, status=0/SUCCESS)
+   Main PID: 1840 (nginx)
+      Tasks: 5 (limit: 22704)
+     Memory: 4.5M
+        CPU: 20ms
+     CGroup: /system.slice/nginx.service
+             ├─1840 "nginx: master process /usr/sbin/nginx"
+             ├─1841 "nginx: worker process"
+             ├─1842 "nginx: worker process"
+             ├─1843 "nginx: worker process"
+             └─1844 "nginx: worker process"
+
+Oct 25 13:02:20 web.lan2.tp2 systemd[1]: Starting The nginx HTTP and reverse pr>
+Oct 25 13:02:20 web.lan2.tp2 nginx[1838]: nginx: the configuration file /etc/ng>
+Oct 25 13:02:20 web.lan2.tp2 nginx[1838]: nginx: configuration file /etc/nginx/>
+Oct 25 13:02:20 web.lan2.tp2 systemd[1]: Started The nginx HTTP and reverse proxy server.
+```
+
+* Ouverture du port firewall :
+
+```
+[florentinfallon@node2 site_nul]$ sudo firewall-cmd --zone=public --add-port=80/tcp
+Warning: ALREADY_ENABLED: '80:tcp' already in 'public'
+success
+```
+
+* Programme nginx qui troune sur le port 80 :
+
+```
+[florentinfallon@node2 site_nul]$ ss -lapute || grep http
+tcp          LISTEN        0             511                        0.0.0.0:http                    0.0.0.0:*            ino:24035 sk:4 cgroup:/system.slice/nginx.service <->  
+tcp          LISTEN        0             511                           [::]:http                       [::]:*            ino:24036 sk:7 cgroup:/system.slice/nginx.service v6only:1 <->   
+```
+
+* Firewall bien configuré :
+
+```
+[florentinfallon@node2 site_nul]$ sudo firewall-cmd --zone=public --list-all || grep ports
+ ports: 80/tcp
+```
+
+* Visite du site :
+
+```
+[florentinfallon@node2 site_nul]$ curl site_nul.tp2
+<!doctype html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+     <body>
+    <h2>Just visiting?</h2>
+     </body>
+</html>
+```
